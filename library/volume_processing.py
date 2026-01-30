@@ -17,7 +17,7 @@ from library import lee94, radii_corrections as RadCor
 
 from numba import njit, prange
 from scipy.ndimage import label
-from skimage.morphology import skeletonize_3d
+from skimage.morphology import skeletonize
 
 
 #######################

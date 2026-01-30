@@ -15,7 +15,7 @@ from time import perf_counter as pf
 import nibabel
 import numpy as np
 from numba import njit, prange
-from skimage.morphology import skeletonize_3d
+from skimage.morphology import skeletonize
 
 
 ###########################

@@ -193,7 +193,7 @@ def read_cache_results():
 def get_cache_path():
     wd = helpers.get_cwd()
     results_cache = helpers.std_path(
-        os.path.join(wd, "library", "cache", "results_cache.csv")
+        os.path.join(wd, "VesselVio", "library", "cache", "results_cache.csv")
     )
     return results_cache
 

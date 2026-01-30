@@ -327,7 +327,7 @@ def process_volume(
 
 if __name__ == "__main__":
     compiler_file = os.path.join(
-        helpers.get_cwd(), "library/volumes/JIT_volume.nii"
+        helpers.get_cwd(), "VesselVio/library/volumes/JIT_volume.nii"
     )  # DON'T DELETE
 
     #####################
@@ -373,7 +373,7 @@ if __name__ == "__main__":
     # Filepath to the annotation. RGB series folder OR .nii Allen brain atlas file
     annotation_file = "ANNOTATION_VOLUME_FILE.nii"
 
-    atlas = "library/annotations/annotation_trees/p56 Mouse Brain.json"
+    atlas = "VesselVio/libraryannotations/annotation_trees/p56 Mouse Brain.json"
     annotation_type = "ID"  # 'RGB' or 'ID'
 
     annotation_regions = ["Dentate gyrus, molecular layer"]
@@ -439,9 +439,9 @@ if __name__ == "__main__":
     image_dimensions = 3  # 2 or 3. Affects features extraction. 2D datasets can be treated as if they were 3D.
 
     # Results/graph export
-    save_segment_results = False  # Save individual segment features to csv file
-    results_folder = "Results/Path/Here"
-    save_graph = False  # Save reduced graph export?
+    save_segment_results = True  # Save individual segment features to csv file
+    results_folder = "/home/bastian/git/vana/data/vis/vesselvio"
+    save_graph = True  # Save reduced graph export?
     verbose = True
 
     gen_options = IC.AnalysisOptions(
@@ -466,7 +466,7 @@ if __name__ == "__main__":
     ######################
     ### Run files here ###
     ######################
-    file1 = "VOLUME_FILE.nii"
+    file1 = "/home/bastian/git/vana/data/vis/vesselvio/vesselvio_test.nii" #"VOLUME_FILE.nii"
 
     iteration = 0
 

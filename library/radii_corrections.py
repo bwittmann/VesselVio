@@ -69,9 +69,9 @@ def load_corrections(
     # Load the correct LUT: resolution(analysis) or basis(visualization) units.
     wd = get_cwd()  # Find wd
     if not Visualize:
-        rc_path = os.path.join(wd, "library/volumes/Radii_Corrections.npy")
+        rc_path = os.path.join(wd, "VesselVio/library/volumes/Radii_Corrections.npy")
     else:
-        rc_path = os.path.join(wd, "library/volumes/Vis_Radii_Corrections.npy")
+        rc_path = os.path.join(wd, "VesselVio/library/volumes/Vis_Radii_Corrections.npy")
 
     # Build function
     def build(resolution):

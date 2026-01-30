@@ -262,7 +262,7 @@ def get_volume_cache_path(directory: str = None) -> str:
     Parameters:
     directory : str, optional
         The cache directory. Default ``None``, which leads to a save in the
-        ``"library/cache/"`` folder.
+        ``"VesselVio/librarycache/"`` folder.
 
     Returns:
     str : cache_directory
