@@ -652,7 +652,7 @@ def create_graph(
     # Create graph, populate graph with correct number of vertices.
     global g
     g = ig.Graph()
-    g.add_vertices(len(points))
+    g.add_vertices(len(points)) # n vertices (nodes), 0 edges
 
     # Populate vertices with cartesian coordinates and radii
     g.vs["v_coords"] = VolProc.absolute_points(points, point_minima)
@@ -660,10 +660,10 @@ def create_graph(
     g.vs["vis_radius"] = vis_radii
 
     # Prepare what we need for our edge identifictation
-    spaces = orientations()  # 13-neighbor search
+    spaces = orientations()  # 13-neighbor search   TODO why 13?
     vertex_LUT = construct_vLUT(points, volume_shape)
     edges = identify_edges(points, vertex_LUT, spaces)
-    g.add_edges(edges)
+    g.add_edges(edges)  # (m, 2); m = num edges
 
     if verbose:
         print("Filtering cliques...", end="\r")

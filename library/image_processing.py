@@ -19,6 +19,9 @@ import numpy as np
 
 from library import helpers
 from skimage.io import imread
+import SimpleITK as sitk
+
+from VVTerminal import printc
 
 ## Global min_resolution variable
 min_resolution = 1
@@ -34,7 +37,7 @@ def load_volume(file, verbose=False):
     # Only use .nii files for annotations, this is mainly due to loading speeds
     if helpers.get_ext(file) == ".nii":
         try:
-            volume = load_nii_volume(file)
+            volume, spacing = load_nii_volume(file)
         except Exception as error:
             print(f"Could not load .nii file using nibabel: {error}")
             volume = skimage_load(file)
@@ -47,16 +50,17 @@ def load_volume(file, verbose=False):
     if verbose:
         print(f"Volume loaded in {pf() - t1:.2f} s.")
 
-    return volume, volume.shape
+    return volume, volume.shape, spacing
 
 
 # Load nifti files
 def load_nii_volume(file):
-    proxy = nibabel.load(file)
-    data = proxy.dataobj.get_unscaled().transpose()
-    if data.ndim == 4:
-        data = data[0]
-    return data
+    sitk_img = sitk.ReadImage(file)
+    spacing = np.array(sitk_img.GetSpacing()).tolist()[::-1]    # TODO
+
+    img = sitk.GetArrayFromImage(sitk_img)
+    img[img == 2] = 0 # TODO
+    return img, spacing[::-1]
 
 
 # Load an image volume using SITK, return None upon read failure

@@ -33,6 +33,25 @@ from library.annotation import (
 )
 
 
+def printc(text, color="green", bold=False):
+    """To highlight key steps."""
+    colors = {
+        "black": "30",
+        "red": "31",
+        "green": "32",
+        "yellow": "33",
+        "blue": "34",
+        "magenta": "35",
+        "cyan": "36",
+        "white": "37",
+    }
+
+    color_code = colors.get(color.lower(), "37")
+    style = "1" if bold else "0"
+
+    print(f"\033[{style};{color_code}m{text}\033[0m")
+
+
 #######################
 ### Input Functions ###
 #######################
@@ -131,8 +150,6 @@ def process_volume(
         tic = time.perf_counter()
         print("Processing dataset:", filename)
 
-    # Make sure the resolution is in the proper format
-    resolution = ImProc.prep_resolution(gen_options.resolution)
 
     if ann_options.annotation_type == "None":
         annotation_data = {None: None}
@@ -155,7 +172,9 @@ def process_volume(
 
         ## Image and volume processing.
         # region
-        volume, image_shape = ImProc.load_volume(volume_file, verbose=verbose)
+        volume, image_shape, resolution = ImProc.load_volume(volume_file, verbose=verbose)
+        resolution = ImProc.prep_resolution(resolution) # make sure the resolution is in the proper format
+        printc(f'Loaded volume of shape {image_shape} and resolution {resolution}.')
 
         if volume is None:  # make sure the image was loaded.
             if verbose:
@@ -205,18 +224,19 @@ def process_volume(
                     print("ROI Not in dataset.")
                 continue
         else:
-            volume, point_minima = VolProc.volume_prep(volume)
+            volume, point_minima = VolProc.volume_prep(volume)  # crops volume to bounding 
             roi_name = "None"
             roi_volume = "NA"
 
         # Pad the volume for skeletonizatino
-        volume = VolProc.pad_volume(volume)
+        volume = VolProc.pad_volume(volume) # pads by one on each side
 
         # Skeletonize, then find radii of skeleton points
-        points = VolProc.skeletonize(volume, verbose=verbose)
+        points = VolProc.skeletonize(volume, verbose=verbose)   # (n, 3); centerline coords
+        printc(f'Generated skeleton with {points.shape[0]} elements.')
 
         # Calculate radii
-        skeleton_radii, vis_radii = VolProc.radii_calc_input(
+        skeleton_radii, vis_radii = VolProc.radii_calc_input(   # (n, 1); radii for centerline coords
             volume,
             points,
             resolution,
@@ -248,18 +268,21 @@ def process_volume(
             point_minima,
             verbose=verbose,
         )
+        printc(f'Generated skeleton graph with {graph.vcount()} nodes and {graph.ecount()} edges.')
 
         if gen_options.prune_length > 0:
             # Prune connected endpoint segments based on a user-defined length
             GProc.prune_input(
                 graph, gen_options.prune_length, resolution, verbose=verbose
             )
+            printc(f'Pruned skeleton graph resulting in {graph.vcount()} nodes and {graph.ecount()} edges.')
 
         # Filter isolated segments that are shorter than defined length
         # If visualizing the dataset, filter these from the volume as well.
         GProc.filter_input(
             graph, gen_options.filter_length, resolution, verbose=verbose
         )
+        printc(f'Filtered skeleton graph resulting in {graph.vcount()} nodes and {graph.ecount()} edges.')
 
         # endregion
         ## Analysis.
@@ -267,6 +290,7 @@ def process_volume(
             graph,
             resolution,
             filename,
+            volume_file,
             image_dim=gen_options.image_dimensions,
             image_shape=image_shape,
             roi_name=roi_name,
@@ -275,6 +299,7 @@ def process_volume(
             # Reduce graph if saving or visualizing
             reduce_graph=vis_options.visualize or gen_options.save_graph,
             verbose=verbose,
+            centerline_smoothing=True
         )
         ResExp.cache_result(result)  # Cache results
 
@@ -298,7 +323,7 @@ def process_volume(
             f"of {time.perf_counter() - tic:0.2f} seconds."
         )
 
-        ## Visualization
+    ## Visualization
     if vis_options.visualize:
         if (
             not vis_options.visualize
@@ -315,10 +340,10 @@ def process_volume(
                 _, volume, _ = ImProc.reshape_2D(points, volume, verbose=verbose)
 
         VolVis.mesh_construction(
-            g_main, vis_options, volume, iteration=iteration, verbose=verbose
+            g_main, vis_options, volume, file_name=volume_file, iteration=iteration, verbose=verbose
         )
 
-    ResExp.write_results(results_folder, gen_options.image_dimensions)
+    ResExp.write_results(results_folder, gen_options.image_dimensions, verbose=True)
 
     # Make sure we delete the labeled_cache_volume if it exists
     ImProc.clear_labeled_cache()
@@ -388,7 +413,7 @@ if __name__ == "__main__":
     ### Visualization Options ###
     #############################
     # region
-    visualize = False  # Visualize the dataset?
+    visualize = True  # Visualize the dataset?
     simplified_visualization = False  # Faster but less detailed visualization.
     # Network
     load_network = False
@@ -461,7 +486,7 @@ if __name__ == "__main__":
     #####################
     # Use this key in place of 'ann_options' if you aren't analyzing annotated datasets.
     no_annotation = IC.AnnotationOptions(None, None, "None", None)
-    process_volume(compiler_file, gen_options, no_annotation, vis_options, 0, verbose)
+    # process_volume(compiler_file, gen_options, no_annotation, vis_options, 0, verbose)
 
     ######################
     ### Run files here ###

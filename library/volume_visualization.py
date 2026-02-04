@@ -11,6 +11,7 @@ __download__ = "https://jacobbumgarner.github.io/VesselVio/Downloads"
 
 from multiprocessing import cpu_count
 from time import perf_counter as pf
+from pathlib import Path
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -513,6 +514,7 @@ def mesh_construction(
     graph,
     vis_options,
     volume=None,
+    file_name="",
     graph_type="Centerlines",
     iteration=0,
     application=False,
@@ -545,7 +547,8 @@ def mesh_construction(
         return meshes
 
     if not vis_options.create_movie:
-        p = pv.Plotter(multi_samples=8, window_size=[2928, 1824], off_screen=True)
+        p = pv.Plotter(window_size=[2928, 1824], off_screen=True)
+        p.enable_anti_aliasing('msaa', multi_samples=8)
     else:
         # p = pv.Plotter(window_size=[1800,1800],lighting='light_kit')
         p = pv.Plotter(lighting="light_kit")
@@ -632,6 +635,9 @@ def mesh_construction(
 
         light = pv.Light(light_type="headlight", intensity=0.1)
         p.add_light(light)
-        p.show()
+        # p.show()
+
+        p.camera_position = 'xz'
+        p.screenshot(str(Path(file_name).with_suffix('')) + '.png')
 
     return

@@ -13,11 +13,14 @@ from collections import namedtuple
 from math import ceil, log
 from multiprocessing import cpu_count
 from time import perf_counter as pf
+from pathlib import Path
 
 import numpy as np
 from geomdl import knotvector
+import pandas as pd
 
 from library import graph_processing as GProc, helpers, image_processing as ImProc
+from VVTerminal import printc
 from numba import njit
 from scipy import interpolate
 
@@ -71,9 +74,11 @@ def delta_calc(num_verts, vis_radius):
 ##########################
 FeatureSet = namedtuple(
     "FeatureSet",
-    """volume_or_PAF, surface_area, length, tortuosity,
-                        radius_avg, radius_max, radius_min, radius_SD,
-                        radii_list, coords_list, vis_radius""",
+    """
+        volume_or_PAF, surface_area, length, tortuosity,
+        radius_avg, radius_max, radius_min, radius_SD,
+        radii_list, coords_list, coords_raw_list, vis_radius
+    """,
 )
 
 
@@ -106,6 +111,7 @@ def feature_extraction(
     coords = np.array(coords_list)
 
     # Interpolate points for a smoothed centerline.
+    coords_raw = coords.copy()
     if centerline_smoothing:
         # See global def of min_resolution in ImProc
         coords = seg_interpolate(coords, r_avg / ImProc.min_resolution)
@@ -152,6 +158,7 @@ def feature_extraction(
         r_SD,
         vis_radii,
         coords,
+        coords_raw,
         vis_radius,
     )
     return features
@@ -273,9 +280,7 @@ def large_seg_path(
     if len(endpoints) == 2:
         # Find the ordered path of vertices between each endpoint.
         # The indices of this path will be relative
-        path = gsegs.get_shortest_paths(endpoints[0], to=endpoints[1], output="vpath")[
-            0
-        ]
+        path = gsegs.get_shortest_paths(endpoints[0], to=endpoints[1], output="vpath")[0]
 
         # Add true indices of our segment path to the point_list.
         point_list = [segment_ids[point].index for point in path]
@@ -505,6 +510,7 @@ def vgraph_analysis(
     image_dim,
     image_shape,
     verbose=False,
+    filepath=''
 ):
     features = []
     edges = []
@@ -521,11 +527,11 @@ def vgraph_analysis(
     ## First extract results from segments that aren't between branch points
     # This represents the vast majority of segments
     if verbose:
-        print("Analyzing large segments...", end="\r")
+        print("Analyze segments.", end="\r")
     global gsegs, segments, segment_ids
-    segment_ids = g.vs.select(_degree_lt=3)
-    gsegs = g.subgraph(segment_ids)
-    segments = list(gsegs.components())
+    segment_ids = g.vs.select(_degree_lt=3) # containing all nodes with degree 0, 1, or 2; non-bifurcation nodes
+    gsegs = g.subgraph(segment_ids)         # construct subgraph excluding bifurcations
+    segments = list(gsegs.components())     # retrieve connected components, ie segments; node ids in segments strictly increase, not ordered based on degree, etc.
 
     seg_count = len(segments)
     workers = cpu_count()
@@ -538,6 +544,8 @@ def vgraph_analysis(
             edges.extend(result[1])
     else:
         features, edges = segment_feature_extraction(0, seg_count)
+    print(f"Analyzed {seg_count} segments.")
+    printc(f'Condstructed spline graph containing {len(edges)} edges and {len(np.unique(np.array(edges)))} nodes.')
 
     # Global cleanup
     del (gsegs, segments, segment_ids)
@@ -545,10 +553,10 @@ def vgraph_analysis(
     ## Now extract features from between-branch point segments
     # These have typically 2-3 vertices
     if verbose:
-        print("Analyzing large segments", end="\r")
+        print("Analyze bifurcation/branch segments.", end="\r")
     global branch_segments, branch_ids
-    branch_ids = g.vs.select(_degree_gt=2)
-    gbifs = g.subgraph(branch_ids)
+    branch_ids = g.vs.select(_degree_gt=2)  # containing all nodes with degree >3; bifurcation nodes
+    gbifs = g.subgraph(branch_ids)          # construct subgraph solely containing bifurcations
     branch_segments = gbifs.es()  # Can slice this iterator
 
     seg_count = len(branch_segments)
@@ -564,6 +572,7 @@ def vgraph_analysis(
         b_features, b_edges = branch_segment_feature_extraction(0, seg_count)
         features.extend(b_features)
         edges.extend(b_edges)
+    printc(f'Added between-branch point segments to spline graph; {len(edges)} edges and {len(np.unique(np.array(edges)))} nodes.')
 
     # Global variable cleanup
     del (
@@ -578,9 +587,69 @@ def vgraph_analysis(
     )
 
     if verbose:
-        print("Organizing results...", end="\r")
+        print("Organizing results.", end="\r")
     # Return the results and reduce the graph if saving graph or visualizing
+    vana_save_graph(graph, features, edges, filepath)
     return record_results(graph, features, edges, reduce_graph)
+
+
+def vana_save_graph(graph, features, edges, filepath):
+    # construct nodes
+    node_ids = np.unique(np.array(edges))
+    nodes = graph.vs[node_ids]
+    nodes_degree = nodes.degree()
+    nodes_coords = np.array(nodes['v_coords'])
+    nodes_rad = np.array(nodes['v_radius'])
+
+    df_nodes = pd.DataFrame({
+        'z': nodes_coords[:, 0],
+        'x': nodes_coords[:, 1],
+        'y': nodes_coords[:, 2],
+        'degree': nodes_degree,
+        'radius': nodes_rad
+    })
+    df_nodes.to_pickle(str(Path(filepath).with_suffix('')) + '_nodes.pkl')
+
+    new_ids = np.arange(len(node_ids))     
+    id_map = dict(zip(node_ids, new_ids))   # asign new ids
+
+    # construct edges
+    edges_remapped = np.array([(id_map[u], id_map[v]) for u,v in edges])
+    edges_splines_smoothed = [feature.coords_list for feature in features]
+    edges_splines = [feature.coords_raw_list for feature in features]
+    edges_length = [feature.length for feature in features]
+    edges_radii = [feature.radii_list for feature in features]
+    edges_radius_sd = [feature.radius_SD for feature in features]
+    edges_radius_avg = [feature.radius_avg for feature in features]
+    edges_radius_max = [feature.radius_max for feature in features]
+    edges_radius_min = [feature.radius_min for feature in features]
+    edges_surface_area = [feature.surface_area for feature in features]
+    edges_tortuosity = [feature.tortuosity for feature in features]
+    edges_volume = [feature.volume_or_PAF for feature in features]
+
+    df_edges = pd.DataFrame({
+        'node_id0': edges_remapped[:, 0],
+        'node_id1': edges_remapped[:, 1],
+        'length': edges_length,
+        'edges_radius_sd': edges_radius_sd,
+        'edges_radius_avg': edges_radius_avg,
+        'edges_radius_max': edges_radius_max,
+        'edges_radius_min': edges_radius_min,
+        'edges_surface_area': edges_surface_area,
+        'edges_tortuosity': edges_tortuosity,
+        'edges_volume': edges_volume,
+        'edges_radii': edges_radii,
+        'edges_splines': edges_splines
+    })
+    df_edges.to_pickle(str(Path(filepath).with_suffix('')) + '_edges.pkl')
+    printc(f'Successfully exported graph and its features as .pkl files.')
+
+    # sanity check first voxel in spline should be same as node0 and last voxel in spline should be same as node1
+    assert all([np.allclose(edges_splines_smoothed[m][0], edges_splines[m][0]) and np.allclose(edges_splines[m][0], nodes_coords[edges_remapped[:, 0][m]]) for m in range(len(edges_length))])
+    assert all([np.allclose(edges_splines_smoothed[m][-1], edges_splines[m][-1]) and np.allclose(edges_splines[m][-1], nodes_coords[edges_remapped[:, -1][m]]) for m in range(len(edges_length))])
+    
+    k = 1
+
 
 
 # Extract features from edge graphs
@@ -634,6 +703,7 @@ def feature_input(
     g,
     resolution,
     filename,
+    filepath,
     image_dim=3,
     image_shape=None,
     graph_type="Centerlines",
@@ -672,6 +742,7 @@ def feature_input(
             image_dim,
             image_shape,
             verbose=verbose,
+            filepath=filepath
         )
     else:
         (

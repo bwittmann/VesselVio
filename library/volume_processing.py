@@ -17,7 +17,7 @@ from library import lee94, radii_corrections as RadCor
 
 from numba import njit, prange
 from scipy.ndimage import label
-from skimage.morphology import skeletonize
+from skimage.morphology import skeletonize as skeletonize_3d
 
 
 #######################
@@ -315,12 +315,12 @@ def skeletonize(volume, verbose=False):
         skeleton = skeletonize_3d(volume)
     else:
         skeleton = np.ascontiguousarray(volume.copy())
-        skeleton = lee94.skeletonize(skeleton, verbose=verbose)
+        skeleton = lee94.skeletonize(skeleton, verbose=verbose) # (H, W, D)
 
-    # Rearrange point array to (n,3) or (n,2).
+    # Rearrange point array to (n, 3) or (n, 2).
     points = find_centerlines(skeleton)
 
     if verbose:
         print(f"Skeletonization completed in {pf() - t:0.2f} seconds.")
 
-    return points
+    return points # (n, 3); centerline coords
