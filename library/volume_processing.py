@@ -23,7 +23,7 @@ from skimage.morphology import skeletonize as skeletonize_3d
 #######################
 ### Volume Bounding ###
 #######################
-def volume_prep(volume):
+def volume_prep(volume, volume_raw, anatomy):
     """IO for volume binarization/segmentation and volume bounding
     volume: np.ndarray or np.memmap
     """
@@ -34,17 +34,17 @@ def volume_prep(volume):
         volume = np.ascontiguousarray(volume)
     # 3D Processing
     if volume.ndim == 3:
-        volume, minima = binarize_and_bound_3D(volume)
+        volume, minima, volume_raw, anatomy = binarize_and_bound_3D(volume, volume_raw, anatomy)
 
     # 2D Processing
     elif volume.ndim == 2:
         volume, minima = bound_2D(volume)
 
-    return volume, minima
+    return volume, minima, volume_raw, anatomy
 
 
 @njit(parallel=True, nogil=True, cache=True)
-def binarize_and_bound_3D(volume):
+def binarize_and_bound_3D(volume, volume_raw, anatomy):
     """
     A function that simultaneously serves to segment an integer
     from a volume as well as record the bounding box locations
@@ -74,7 +74,13 @@ def binarize_and_bound_3D(volume):
     volume = volume[
         mins[0] : maxes[0] + 1, mins[1] : maxes[1] + 1, mins[2] : maxes[2] + 1
     ]
-    return volume, mins
+    volume_raw = volume_raw[
+        mins[0] : maxes[0] + 1, mins[1] : maxes[1] + 1, mins[2] : maxes[2] + 1 
+    ]
+    anatomy = anatomy[
+        mins[0] : maxes[0] + 1, mins[1] : maxes[1] + 1, mins[2] : maxes[2] + 1 
+    ]
+    return volume, mins, volume_raw, anatomy
 
 
 # Bound and segment 2D volumes
@@ -164,6 +170,78 @@ def filter_segments(labeled, keep_ids):
 
 
 ###########################
+### Intensity Cal.      ###
+###########################
+def int_calc_input(volume, volume_raw, skeleton_radii, points, verbose=False):
+    if verbose:
+        t = pf()
+        print("Calculating intensities...", end="\r")
+
+    # determine intensity of skeleton voxels
+    skeleton_int = volume_raw[points[:,0], points[:,1], points[:,2]].tolist()
+    assert len(np.unique(volume[points[:,0], points[:,1], points[:,2]])) == 1
+
+    # determine intensity in shpere of radius r at point i
+    skeleton_int_shpere_mean = np.zeros_like(skeleton_radii)
+    skeleton_int_shpere_min = np.zeros_like(skeleton_radii)
+    skeleton_int_shpere_max = np.zeros_like(skeleton_radii)
+    skeleton_int_shpere_sd = np.zeros_like(skeleton_radii)
+    for i, (z, y, x) in enumerate(points):
+        r = skeleton_radii[i]
+
+        # bounding box (clipped to volume)
+        z0 = int(np.floor(max(z - r, 0)))
+        y0 = int(np.floor(max(y - r, 0)))
+        x0 = int(np.floor(max(x - r, 0)))
+
+        z1 = int(np.ceil(min(z + r + 1, volume_raw.shape[0])))
+        y1 = int(np.ceil(min(y + r + 1, volume_raw.shape[1])))
+        x1 = int(np.ceil(min(x + r + 1, volume_raw.shape[2])))
+
+        subvol_raw = volume_raw[z0:z1, y0:y1, x0:x1]
+        subvol_mask = volume[z0:z1, y0:y1, x0:x1]
+
+        # Coordinate grid (voxel offsets)
+        zz, yy, xx = np.ogrid[z0:z1, y0:y1, x0:x1]
+
+        dz = (zz - z)
+        dy = (yy - y)
+        dx = (xx - x)
+
+        dist = np.sqrt(dz**2 + dy**2 + dx**2)
+
+        mask = (dist <= r) & subvol_mask
+
+        if np.any(mask):
+            skeleton_int_shpere_mean[i] = subvol_raw[mask == 1].mean()
+            skeleton_int_shpere_min[i] = subvol_raw[mask == 1].min()
+            skeleton_int_shpere_max[i] = subvol_raw[mask == 1].max()
+            skeleton_int_shpere_sd[i] = subvol_raw[mask == 1].std()
+
+    if verbose:
+        print(f"Intensity estimated in {pf() - t:0.2f} seconds.")
+
+    return skeleton_int, skeleton_int_shpere_mean, skeleton_int_shpere_min, skeleton_int_shpere_max, skeleton_int_shpere_sd
+
+
+###########################
+### Anatomy Matching    ###
+###########################
+def ana_match_input(points, anatomy, verbose=False):
+    if verbose:
+        t = pf()
+        print("Matching anatomy labels...", end="\r")
+
+    # determine anatomy labels of skeleton voxels
+    skeleton_anatomy = anatomy[points[:,0], points[:,1], points[:,2]].tolist()
+
+    if verbose:
+        print(f"Anatomy matched in {pf() - t:0.2f} seconds.")
+    
+    return skeleton_anatomy
+
+
+###########################
 ### Radius Calculations ###
 ###########################
 # Loading dock for our volume radii corrections
@@ -174,7 +252,7 @@ def radii_calc_input(volume, points, resolution, gen_vis_radii=False, verbose=Fa
 
     # Calculate radii for feature analysis
     # Load the mEDT_LUT
-    LUT = RadCor.load_corrections(resolution, verbose=verbose)
+    LUT = RadCor.load_corrections(resolution, verbose=verbose)  # read luck-up table for radius correction
     skeleton_radii = radii_calc(volume, points, LUT)
     del LUT  # Just for sanity
 
@@ -252,7 +330,7 @@ def calculate_3Dradii(volume, points, LUT):
             # Hard-coding this could be problematic.
             if i == 149:
                 skeleton_radii[p] = LUT[-1, -1, -1]
-                break
+                break   # TODO check if we run into this
 
     return skeleton_radii
 

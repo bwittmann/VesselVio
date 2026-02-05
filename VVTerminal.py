@@ -11,6 +11,7 @@ __download__ = "https://jacobbumgarner.github.io/VesselVio/Downloads"
 
 import os
 import time
+from pathlib import Path
 
 import igraph as ig
 
@@ -143,9 +144,11 @@ def process_graph(file_path, gen_options, graph_options, vis_options, verbose):
 
 # Process raw segmented volumes
 def process_volume(
-    volume_file, gen_options, ann_options, vis_options, iteration, verbose
+    path_to_file, gen_options, ann_options, vis_options, iteration, verbose
 ):
-    filename = ImProc.get_filename(volume_file)
+    filename = path_to_file.name
+    volume_file = [path for path in list(path_to_file.iterdir()) if 'part_vessels_ss.nii' in path.name][0]
+
     if verbose:
         tic = time.perf_counter()
         print("Processing dataset:", filename)
@@ -172,9 +175,9 @@ def process_volume(
 
         ## Image and volume processing.
         # region
-        volume, image_shape, resolution = ImProc.load_volume(volume_file, verbose=verbose)
-        resolution = ImProc.prep_resolution(resolution) # make sure the resolution is in the proper format
-        printc(f'Loaded volume of shape {image_shape} and resolution {resolution}.')
+        volume, image_shape, spacing, volume_raw, anatomy = ImProc.load_volume(path_to_file, raw_file=True, anatomy=True, verbose=verbose)
+        resolution = ImProc.prep_resolution(gen_options.resolution) # make sure the resolution is in the proper format
+        printc(f'Loaded volume of shape {image_shape} and spacing {spacing}.')  # TODO check difference between spacing and resolution
 
         if volume is None:  # make sure the image was loaded.
             if verbose:
@@ -224,13 +227,15 @@ def process_volume(
                     print("ROI Not in dataset.")
                 continue
         else:
-            volume, point_minima = VolProc.volume_prep(volume)  # crops volume to bounding 
+            volume, point_minima, volume_raw, anatomy = VolProc.volume_prep(volume, volume_raw, anatomy)  # crops volume to bounding 
             roi_name = "None"
             roi_volume = "NA"
 
         # Pad the volume for skeletonizatino
         volume = VolProc.pad_volume(volume) # pads by one on each side
-
+        volume_raw = VolProc.pad_volume(volume_raw)
+        anatomy = VolProc.pad_volume(anatomy)
+        
         # Skeletonize, then find radii of skeleton points
         points = VolProc.skeletonize(volume, verbose=verbose)   # (n, 3); centerline coords
         printc(f'Generated skeleton with {points.shape[0]} elements.')
@@ -241,6 +246,23 @@ def process_volume(
             points,
             resolution,
             gen_vis_radii=vis_options.visualize or gen_options.save_graph,
+            verbose=verbose,
+        )
+
+        # Calculate intensity
+        skeleton_int, skeleton_int_shpere_mean, skeleton_int_shpere_min, \
+        skeleton_int_shpere_max, skeleton_int_shpere_sd = VolProc.int_calc_input(   # (n, 1); intensity in HU for centerline
+            volume,
+            volume_raw,
+            skeleton_radii,
+            points,
+            verbose=verbose,
+        )
+
+        # Add anatomy
+        skeleton_anatomy = VolProc.ana_match_input(   # (n, 1); anatomy label
+            points,
+            anatomy,
             verbose=verbose,
         )
 
@@ -266,6 +288,12 @@ def process_volume(
             vis_radii,
             points,
             point_minima,
+            skeleton_int,
+            skeleton_int_shpere_mean,
+            skeleton_int_shpere_min,
+            skeleton_int_shpere_max,
+            skeleton_int_shpere_sd,
+            skeleton_anatomy,
             verbose=verbose,
         )
         printc(f'Generated skeleton graph with {graph.vcount()} nodes and {graph.ecount()} edges.')
@@ -332,7 +360,7 @@ def process_volume(
         ):
             volume = None
         else:
-            volume, _ = ImProc.load_volume(volume_file)
+            volume, *_ = ImProc.load_volume(volume_file)
             volume = ImProc.prep_numba_compatability(volume)
             # Don't bound for visualization, as points will be true, not relative
             volume = VolProc.pad_volume(volume)
@@ -491,13 +519,13 @@ if __name__ == "__main__":
     ######################
     ### Run files here ###
     ######################
-    file1 = "/home/bastian/git/vana/data/vis/vesselvio/vesselvio_test.nii" #"VOLUME_FILE.nii"
+    path_to_sample = Path("/home/bastian/git/vana/data/vis/vesselvio/liver_51")
 
     iteration = 0
 
     # Use "no_anno" in place of "anno_options" if there are no annotations
-    process_volume(file1, gen_options, no_annotation, vis_options, iteration, verbose)
-
+    process_volume(path_to_sample, gen_options, no_annotation, vis_options, iteration, verbose)
+    
     ### Graph files
     # Follow the format below to load csv-based graphs.
     vertices = "vertices.csv"

@@ -170,7 +170,15 @@ def new_vertex(g, vs, coords=None):
     if not coords:
         coords = np.mean(vs["v_coords"], axis=0)
 
-    vertex = (v_radius, vis_radius, coords)
+    int = np.mean(vs["v_int"])
+    int_sphere_mean = np.mean(vs["v_int_sphere_mean"])
+    int_sphere_min =  np.mean(vs["v_int_sphere_min"])
+    int_sphere_max = np.mean(vs["v_int_sphere_max"])
+    int_sphere_sd = np.mean(vs["v_int_sphere_sd"])
+    
+    anatomy = max(vs["v_anatomy"])
+
+    vertex = (v_radius, vis_radius, coords, int, int_sphere_mean, int_sphere_min, int_sphere_max, int_sphere_sd, anatomy)
     neighbors = restore_v_neighbors(g, vs)
     return vertex, neighbors
 
@@ -257,7 +265,11 @@ def class2and3_processing():
     for cluster in class_two:
         v_info = cluster[0]
         neighbors = cluster[1]
-        v = g.add_vertex(v_radius=v_info[0], vis_radius=v_info[1], v_coords=v_info[2])
+        v = g.add_vertex(
+            v_radius=v_info[0], vis_radius=v_info[1], v_coords=v_info[2], v_int=v_info[3], 
+            v_int_sphere_mean=v_info[4], v_int_sphere_min=v_info[5], v_int_sphere_max=v_info[6], 
+            v_int_sphere_sd=v_info[7], v_anatomy=v_info[8]
+        )
         new_edges.extend(sorted(tuple([v.index, n]) for n in neighbors))
 
     # Restore the class 3 vertices
@@ -267,7 +279,9 @@ def class2and3_processing():
             v_info = c[0]
             neighbors = c[1]
             v = g.add_vertex(
-                v_radius=v_info[0], vis_radius=v_info[1], v_coords=v_info[2]
+                v_radius=v_info[0], vis_radius=v_info[1], v_coords=v_info[2], v_int=v_info[3], 
+                v_int_sphere_mean=v_info[4], v_int_sphere_min=v_info[5], v_int_sphere_max=v_info[6],
+                v_int_sphere_sd=v_info[7], v_anatomy=v_info[8]
             )
             new_edges.extend(sorted(tuple([v.index, n]) for n in neighbors))
 
@@ -643,7 +657,10 @@ def filter_input(
 ### Graph creation ###
 ######################
 def create_graph(
-    volume_shape, skeleton_radii, vis_radii, points, point_minima, verbose=False
+    volume_shape, skeleton_radii, vis_radii, points, point_minima,
+    skeleton_int, skeleton_int_shpere_mean, skeleton_int_shpere_min,
+    skeleton_int_shpere_max, skeleton_int_shpere_sd, skeleton_anatomy,
+    verbose=False
 ):
     if verbose:
         print("Creating Graph...", end="\r")
@@ -658,6 +675,12 @@ def create_graph(
     g.vs["v_coords"] = VolProc.absolute_points(points, point_minima)
     g.vs["v_radius"] = skeleton_radii
     g.vs["vis_radius"] = vis_radii
+    g.vs["v_int"] = skeleton_int
+    g.vs["v_int_sphere_mean"] = skeleton_int_shpere_mean
+    g.vs["v_int_sphere_min"] = skeleton_int_shpere_min
+    g.vs["v_int_sphere_max"] = skeleton_int_shpere_max
+    g.vs["v_int_sphere_sd"] = skeleton_int_shpere_sd
+    g.vs["v_anatomy"] = skeleton_anatomy
 
     # Prepare what we need for our edge identifictation
     spaces = orientations()  # 13-neighbor search   TODO why 13?
@@ -668,7 +691,7 @@ def create_graph(
     if verbose:
         print("Filtering cliques...", end="\r")
 
-    # Remove spurious branchpoints from our labeling
+    # Remove spurious branchpoints from our labeling    TODO check all these steps and verify if beneficial
     clique_filter_input(g, verbose=verbose)
 
     if verbose:

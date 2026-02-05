@@ -638,6 +638,6 @@ def mesh_construction(
         # p.show()
 
         p.camera_position = 'xz'
-        p.screenshot(str(Path(file_name).with_suffix('')) + '.png')
+        p.screenshot(str(Path(file_name).with_suffix('').with_suffix('')) + '.png')
 
     return

@@ -31,18 +31,13 @@ min_resolution = 1
 #### Volume Loading ####
 ########################
 ## Returns a true binary (0,1) array from an image file when given the file name and directory.
-def load_volume(file, verbose=False):
+def load_volume(file, raw_file=False, anatomy=False, verbose=False):
     t1 = pf()
 
-    # Only use .nii files for annotations, this is mainly due to loading speeds
-    if helpers.get_ext(file) == ".nii":
-        try:
-            volume, spacing = load_nii_volume(file)
-        except Exception as error:
-            print(f"Could not load .nii file using nibabel: {error}")
-            volume = skimage_load(file)
-    else:
-        volume = skimage_load(file)
+    try:
+        volume, spacing, raw_file, anatomy = load_nii_volume(file, raw_file, anatomy)
+    except Exception as error:
+        print(f"Could not load .nii file using nibabel: {error}")
 
     if volume is None or volume.ndim not in (2, 3):
         return None
@@ -50,17 +45,48 @@ def load_volume(file, verbose=False):
     if verbose:
         print(f"Volume loaded in {pf() - t1:.2f} s.")
 
-    return volume, volume.shape, spacing
+    return volume, volume.shape, spacing, raw_file, anatomy
 
 
 # Load nifti files
-def load_nii_volume(file):
-    sitk_img = sitk.ReadImage(file)
-    spacing = np.array(sitk_img.GetSpacing()).tolist()[::-1]    # TODO
+def load_nii_volume(files, raw_file=None, anatomy=False):
+    def read_nifti(path):
+        sitk_img = sitk.ReadImage(path)
+        spacing = np.array(sitk_img.GetSpacing()).tolist()[::-1]    # TODO
+        img = sitk.GetArrayFromImage(sitk_img)
+        return img, spacing
+    
+    # load segmentation mask
+    file = [path for path in list(files.iterdir()) if 'part_vessels_ss.nii' in path.name][0]
+    img, spacing = read_nifti(file)
+    img[img > 1] = 0 # TODO exclude heart for graph estimation
 
-    img = sitk.GetArrayFromImage(sitk_img)
-    img[img == 2] = 0 # TODO
-    return img, spacing[::-1]
+    if raw_file:    # laod CT image
+        file = [path for path in list(files.iterdir()) if 'img' in path.name][0]
+        raw_img, raw_spacing = read_nifti(file)
+        assert raw_spacing == spacing
+        assert raw_img.shape == img.shape
+    else:
+        raw_img = None
+
+    if anatomy: # get anatomy labels
+        map_551, anatomy_spacing = read_nifti([path for path in list(files.iterdir()) if '551' in path.name][0])
+        map_552, _ = read_nifti([path for path in list(files.iterdir()) if '552' in path.name][0])
+        map_553, _ = read_nifti([path for path in list(files.iterdir()) if '553' in path.name][0])
+        map_554, _ = read_nifti([path for path in list(files.iterdir()) if '554' in path.name][0])
+        map_555, _ = read_nifti([path for path in list(files.iterdir()) if '555' in path.name][0])
+        map_558, _ = read_nifti([path for path in list(files.iterdir()) if '558' in path.name][0])
+        maps = [map_551, map_552, map_553, map_554, map_555, map_558]
+
+        c_max = [0, 17, 24, 18, 21, 24] # from https://github.com/murong-xu/CADS/blob/main/resources/info/labelmap.md for consistency
+        c_max = np.cumsum(np.array(c_max), axis=0)
+        anatomy = np.stack([t + i * (t > 0) for t, i in zip(maps, c_max)]).max(axis=0)
+        assert anatomy_spacing == spacing
+        assert anatomy.shape == img.shape
+    else:
+        anatomy = None
+
+    return img, spacing, raw_img, anatomy
 
 
 # Load an image volume using SITK, return None upon read failure
