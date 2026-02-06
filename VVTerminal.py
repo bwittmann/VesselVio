@@ -525,7 +525,7 @@ if __name__ == "__main__":
     ######################
     ### Run files here ###
     ######################
-    path_to_sample = Path("/home/bastian/git/vana/data/vis/vesselvio/liver_51")
+    path_to_sample = Path("/home/bastian/git/vana/data/vis/vesselvio/liver_127")
     # path_to_sample = Path("/mnt/hdd0/bastian/MSD3_cads_iso/liver_48")
 
 

@@ -664,6 +664,12 @@ def vana_save_graph(graph, features, edges, filepath):
 
     edges_anatomy_label = [feature.anatomy for feature in features]
 
+    artery_labels = [85, 86, 110, 112, 113, 126]
+    vein_labels   = [114, 115, 127, 128]
+    edge_vessel_type_a = np.array([(feature.anatomy in artery_labels) for feature in features]) * 1
+    edge_vessel_type_v = np.array([(feature.anatomy in vein_labels) for feature in features]) * 2
+    edge_vessel_type = (np.zeros_like(edges_anatomy_label) + edge_vessel_type_a + edge_vessel_type_v).tolist()
+
     df_edges = pd.DataFrame({
         'node_id0': edges_remapped[:, 0],
         'node_id1': edges_remapped[:, 1],
@@ -688,6 +694,7 @@ def vana_save_graph(graph, features, edges, filepath):
         'int_sphere_max': edges_int_sphere_max,
         'int_sphere_sd': edges_int_sphere_sd,
         'anatomy_label': edges_anatomy_label,
+        'vessel_type': edge_vessel_type,
     })
     df_edges.to_pickle(str(Path(filepath).with_suffix('').with_suffix('')) + '_edges.pkl')
     printc(f'Successfully exported graph and its features as .pkl files.')
