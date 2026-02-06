@@ -683,7 +683,7 @@ def create_vessel(e, tube_points, tube_sides, class_colors):
     vessel = tube.merge(cap0).merge(cap1)
     return vessel
 
-def plot_graph(graph, label, cmap, appendix='', text_png=''):
+def plot_graph(graph, label, cmap, path_to_file, appendix='', text_png=''):
     p = pv.Plotter(off_screen=True)
 
     p.add_mesh(
@@ -741,24 +741,24 @@ def vana_graph_vis(path_to_file, rendering_quality=0):
     ### plot graph and visualize features ###
     # radius
     plot_graph(
-        graph, "Radius", "viridis", "rad", 
+        graph, "Radius", "viridis", path_to_file, "rad", 
         f"Radius --- {path_to_file.name}: #nodes {df_nodes.shape[0]}; #edges {df_edges.shape[0]}.",
     )
 
     # intensities
     plot_graph(
-        graph, "Intensity", "gray", "int", 
+        graph, "Intensity", "gray", path_to_file, "int", 
         f"Intensity --- {path_to_file.name}: #nodes {df_nodes.shape[0]}; #edges {df_edges.shape[0]}.",
     )
 
     # anatomy
     plot_graph(
-        graph, "Anatomy", "rgb", "ana", 
+        graph, "Anatomy", "rgb", path_to_file, "ana", 
         f"Anatomy --- {path_to_file.name}: #nodes {df_nodes.shape[0]}; #edges {df_edges.shape[0]}.",
     )
 
     # av
     plot_graph(
-        graph, "Type", "rgb", "av", 
+        graph, "Type", "rgb", path_to_file, "av", 
         f"A/V --- {path_to_file.name}: #nodes {df_nodes.shape[0]}; #edges {df_edges.shape[0]}.",
     )

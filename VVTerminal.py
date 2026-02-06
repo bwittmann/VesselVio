@@ -34,6 +34,10 @@ from library.annotation import (
     tree_processing,
 )
 
+repo_root = Path(__file__).parents[1] / 'data_generation'
+sys.path.insert(0, str(repo_root))
+from label_propagation import propagate_lg
+
 
 def printc(text, color="green", bold=False):
     """To highlight key steps."""
@@ -525,7 +529,7 @@ if __name__ == "__main__":
     ######################
     ### Run files here ###
     ######################
-    path_to_sample = Path("/home/bastian/git/vana/data/vis/vesselvio/liver_127")
+    path_to_sample = Path("/home/bastian/git/vana/data/vis/vesselvio/liver_87")
     # path_to_sample = Path("/mnt/hdd0/bastian/MSD3_cads_iso/liver_48")
 
 

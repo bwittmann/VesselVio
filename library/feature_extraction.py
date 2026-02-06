@@ -697,7 +697,7 @@ def vana_save_graph(graph, features, edges, filepath):
         'vessel_type': edge_vessel_type,
     })
     df_edges.to_pickle(str(Path(filepath).with_suffix('').with_suffix('')) + '_edges.pkl')
-    printc(f'Successfully exported graph and its features as .pkl files.')
+    printc(f'Successfully exported graph with {len(nodes_coords)} nodes and {len(edges_length)} edges and its features as .pkl files.')
 
     # sanity check first voxel in spline should be same as node0 and last voxel in spline should be same as node1
     assert all([np.allclose(edges_spline_smoothed[m][0], edges_spline[m][0]) and np.allclose(edges_spline[m][0], nodes_coords[edges_remapped[:, 0][m]]) for m in range(len(edges_length))])
