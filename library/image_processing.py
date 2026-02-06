@@ -75,10 +75,12 @@ def load_nii_volume(files, raw_file=None, anatomy=False):
         map_553, _ = read_nifti([path for path in list(files.iterdir()) if '553' in path.name][0])
         map_554, _ = read_nifti([path for path in list(files.iterdir()) if '554' in path.name][0])
         map_555, _ = read_nifti([path for path in list(files.iterdir()) if '555' in path.name][0])
+        map_556, _ = read_nifti([path for path in list(files.iterdir()) if '556' in path.name][0])
         map_558, _ = read_nifti([path for path in list(files.iterdir()) if '558' in path.name][0])
-        maps = [map_551, map_552, map_553, map_554, map_555, map_558]
+        map_553, _ = read_nifti([path for path in list(files.iterdir()) if '553' in path.name][0])
+        maps = [map_552, map_554, map_555, map_556, map_558, map_553, map_551] # order matters!
 
-        c_max = [0, 17, 24, 18, 21, 24] # from https://github.com/murong-xu/CADS/blob/main/resources/info/labelmap.md for consistency
+        c_max = [0, 24, 21, 24, 15, 18, 17] # from https://github.com/murong-xu/CADS/blob/main/resources/info/labelmap.md for consistency
         c_max = np.cumsum(np.array(c_max), axis=0)
         anatomy = np.stack([t + i * (t > 0) for t, i in zip(maps, c_max)]).max(axis=0)
         assert anatomy_spacing == spacing

@@ -12,6 +12,7 @@ __download__ = "https://jacobbumgarner.github.io/VesselVio/Downloads"
 import os
 import time
 from pathlib import Path
+import sys
 
 import igraph as ig
 
@@ -331,11 +332,16 @@ def process_volume(
         )
         ResExp.cache_result(result)  # Cache results
 
-        if gen_options.save_seg_results:
-            ResExp.write_seg_results(seg_results, results_folder, filename, roi_name)
+        # if gen_options.save_seg_results:
+        #     ResExp.write_seg_results(seg_results, results_folder, filename, roi_name)
 
-        if gen_options.save_graph and not vis_options.visualize:
-            GIO.save_graph(graph, filename, results_folder, verbose=verbose)
+        # if gen_options.save_graph and not vis_options.visualize:
+        #     GIO.save_graph(graph, filename, results_folder, verbose=verbose)
+
+        VolVis.vana_graph_vis(path_to_file)
+        printc(f"Finished processing {filename}.")
+        sys.exit()
+
 
         if roi_name != "None":
             graph.es["hex"] = [annotation_data[roi_name]["colors"][0]]
@@ -371,7 +377,7 @@ def process_volume(
             g_main, vis_options, volume, file_name=volume_file, iteration=iteration, verbose=verbose
         )
 
-    ResExp.write_results(results_folder, gen_options.image_dimensions, verbose=True)
+    # ResExp.write_results(results_folder, gen_options.image_dimensions, verbose=True)
 
     # Make sure we delete the labeled_cache_volume if it exists
     ImProc.clear_labeled_cache()
@@ -520,6 +526,8 @@ if __name__ == "__main__":
     ### Run files here ###
     ######################
     path_to_sample = Path("/home/bastian/git/vana/data/vis/vesselvio/liver_51")
+    # path_to_sample = Path("/mnt/hdd0/bastian/MSD3_cads_iso/liver_48")
+
 
     iteration = 0
 

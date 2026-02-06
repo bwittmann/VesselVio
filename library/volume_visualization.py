@@ -13,11 +13,12 @@ from multiprocessing import cpu_count
 from time import perf_counter as pf
 from pathlib import Path
 
-import matplotlib
 import matplotlib.pyplot as plt
 import mcubes
 import numpy as np
 import pyvista as pv
+import pandas as pd
+from tqdm import tqdm
 
 from library import helpers, input_classes as IC, volume_processing as VolProc
 from numba import njit, prange
@@ -641,3 +642,130 @@ def mesh_construction(
         p.screenshot(str(Path(file_name).with_suffix('').with_suffix('')) + '.png')
 
     return
+
+
+def vana_graph_vis(path_to_file, rendering_quality=0):
+    print('Starting visualization.')
+    tube_sides, theta_phi, tube_points = get_rendering_features(rendering_quality)
+
+    # generate random RGB for anatomy labels
+    np.random.seed(42)  # reproducible
+    class_colors = np.random.rand(150, 3)  # RGB in [0,1]
+    class_colors[0] = [0.3, 0.3, 0.3] # no class == grey
+
+    df_edges = pd.read_pickle([file for file in path_to_file.iterdir() if 'edges.pkl' in file.name][0])
+    df_nodes = pd.read_pickle([file for file in path_to_file.iterdir() if 'nodes.pkl' in file.name][0])
+
+    ### generate splines ###
+    graph_tubes = []
+    for idx, e in tqdm(df_edges.iterrows(), desc='Rendering tubes...'):
+        interpolation = min(e["spline_smoothed"].shape[0] * tube_points, 500)
+        line = pv.Spline(e["spline_smoothed"], interpolation)
+
+        line["Radius"] = [e["radius_avg"]]
+        line["Length"] = [e["length"]]
+        line["Tortuosity"] = [e["tortuosity"]]
+        line["Volume"] = [e["volume"]]
+        line["Surface Area"] = [e["surface_area"]]
+        line["Anatomy"] = [class_colors[e["anatomy_label"]].tolist()]
+        line["Intensity"] = [e["int_avg"]]
+
+        # create tubes
+        tube = line.tube(radius=e["radius_avg"], n_sides=tube_sides, capping=False)
+        graph_tubes.append(tube)
+
+
+    graph = pv.MultiBlock(graph_tubes)
+    graph = graph.combine()
+    graph = graph.extract_surface()
+
+
+    ### generate end caps ###
+    # expand edges -> node-wise table
+    edges_long = pd.concat(
+        [
+            df_edges[["node_id0", "anatomy_label", "int_avg"]].rename(
+                columns={"node_id0": "node_id"}
+            ),
+            df_edges[["node_id1", "anatomy_label", "int_avg"]].rename(
+                columns={"node_id1": "node_id"}
+            ),
+        ],
+        ignore_index=True,
+    )
+    # node anatomy: majority vote; node intensity: average
+    node_anatomy = edges_long.groupby("node_id")["anatomy_label"].agg(lambda x: x.value_counts().idxmax()).to_numpy()
+    node_intensity = edges_long.groupby("node_id")["int_avg"].mean().to_numpy()
+
+    cap_pd = pv.PolyData(np.stack(df_nodes['coords'].to_numpy()))
+    cap_pd["Radius"] = df_nodes['radius'].to_numpy()
+    cap_pd["Anatomy"] = class_colors[node_anatomy]
+    cap_pd["Intensity"] = node_intensity
+
+    cap_pd["size"] = df_nodes['radius'].to_numpy()
+    cap_pd.set_active_scalars("size")
+    caps = cap_pd.glyph(
+        geom=pv.Sphere(
+            radius=1, theta_resolution=theta_phi, phi_resolution=theta_phi
+        ),
+        scale=True
+    )
+    caps["Anatomy"] = np.repeat(cap_pd["Anatomy"], caps.n_points // cap_pd.n_points, axis=0)
+
+    def plot_graph(graph, graph_caps, add_caps, label, cmap, appendix='', text_png=''):
+        p = pv.Plotter(off_screen=True)
+
+        p.add_mesh(
+            graph,
+            scalars=label,
+            smooth_shading=True,
+            cmap=None if cmap=="rgb" else cmap,
+            rgb=(cmap=="rgb"),
+            show_scalar_bar=False,
+        )
+
+        if add_caps:
+            p.add_mesh(
+                graph_caps,
+                scalars=label,
+                smooth_shading=True,
+                cmap=None if cmap=="rgb" else cmap,
+                rgb=(cmap=="rgb"),
+                show_scalar_bar=False,
+            )
+
+        light = pv.Light(light_type="headlight", intensity=0.1)
+        p.add_light(light)
+
+        p.add_text(
+            text_png,
+            position='upper_left',
+            font_size=24,
+            color='black'
+        )
+
+        p.camera_position = 'zx'
+        p.screenshot(str(Path(path_to_file).with_suffix('').with_suffix('') / f'graph_{appendix}.png'), scale=5)
+
+
+    ### plot graph and visualize features ###
+    # radius
+    plot_graph(
+        graph, caps, True,
+        "Radius", "viridis", "rad", 
+        f"Radius --- {path_to_file.name}: #nodes {df_nodes.shape[0]}; #edges {df_edges.shape[0]}.",
+    )
+
+    # intensities
+    plot_graph(
+        graph, caps, True,
+        "Intensity", "gray", "int", 
+        f"Intensity --- {path_to_file.name}: #nodes {df_nodes.shape[0]}; #edges {df_edges.shape[0]}.",
+    )
+
+    # anatomy
+    plot_graph(
+        graph, caps, True,
+        "Anatomy", "rgb", "ana", 
+        f"Anatomy --- {path_to_file.name}: #nodes {df_nodes.shape[0]}; #edges {df_edges.shape[0]}.",
+    )

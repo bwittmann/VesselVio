@@ -622,13 +622,11 @@ def vana_save_graph(graph, features, edges, filepath):
     node_ids = np.unique(np.array(edges))
     nodes = graph.vs[node_ids]
     nodes_degree = nodes.degree()
-    nodes_coords = np.array(nodes['v_coords'])
+    nodes_coords = nodes['v_coords']
     nodes_rad = np.array(nodes['v_radius'])
 
     df_nodes = pd.DataFrame({
-        'z': nodes_coords[:, 0],
-        'x': nodes_coords[:, 1],
-        'y': nodes_coords[:, 2],
+        'coords': nodes_coords,
         'degree': nodes_degree,
         'radius': nodes_rad
     })
@@ -640,8 +638,8 @@ def vana_save_graph(graph, features, edges, filepath):
     # construct edges
     edges_remapped = np.array([(id_map[u], id_map[v]) for u,v in edges])
 
-    edges_splines_smoothed = [feature.coords_list for feature in features]
-    edges_splines = [feature.coords_raw_list for feature in features]
+    edges_spline_smoothed = [feature.coords_list for feature in features]
+    edges_spline = [feature.coords_raw_list for feature in features]
 
     edges_length = [feature.length for feature in features]
     edges_surface_area = [feature.surface_area for feature in features]
@@ -670,32 +668,33 @@ def vana_save_graph(graph, features, edges, filepath):
         'node_id0': edges_remapped[:, 0],
         'node_id1': edges_remapped[:, 1],
         'length': edges_length,
-        'edges_radius_sd': edges_radius_sd,
-        'edges_radius_avg': edges_radius_avg,
-        'edges_radius_max': edges_radius_max,
-        'edges_radius_min': edges_radius_min,
-        'edges_surface_area': edges_surface_area,
-        'edges_tortuosity': edges_tortuosity,
-        'edges_volume': edges_volume,
-        'edges_radii': edges_radii,
-        'edges_splines': edges_splines,
-        'edges_int': edges_int,
-        'edges_int_sd': edges_int_sd,
-        'edges_int_avg': edges_in_avg,
-        'edges_int_max': edges_int_max,
-        'edges_int_min': edges_int_min,
-        'edges_int_sphere_avg': edges_int_sphere_avg,
-        'edges_int_sphere_min': edges_in_sphere_min,
-        'edges_int_sphere_max': edges_int_sphere_max,
-        'edges_int_sphere_sd': edges_int_sphere_sd,
-        'edges_anatomy_label': edges_anatomy_label,
+        'radius_sd': edges_radius_sd,
+        'radius_avg': edges_radius_avg,
+        'radius_max': edges_radius_max,
+        'radius_min': edges_radius_min,
+        'surface_area': edges_surface_area,
+        'tortuosity': edges_tortuosity,
+        'volume': edges_volume,
+        'radii': edges_radii,
+        'spline': edges_spline,
+        'spline_smoothed': edges_spline_smoothed,
+        'int': edges_int,
+        'int_sd': edges_int_sd,
+        'int_avg': edges_in_avg,
+        'int_max': edges_int_max,
+        'int_min': edges_int_min,
+        'int_sphere_avg': edges_int_sphere_avg,
+        'int_sphere_min': edges_in_sphere_min,
+        'int_sphere_max': edges_int_sphere_max,
+        'int_sphere_sd': edges_int_sphere_sd,
+        'anatomy_label': edges_anatomy_label,
     })
     df_edges.to_pickle(str(Path(filepath).with_suffix('').with_suffix('')) + '_edges.pkl')
     printc(f'Successfully exported graph and its features as .pkl files.')
 
     # sanity check first voxel in spline should be same as node0 and last voxel in spline should be same as node1
-    assert all([np.allclose(edges_splines_smoothed[m][0], edges_splines[m][0]) and np.allclose(edges_splines[m][0], nodes_coords[edges_remapped[:, 0][m]]) for m in range(len(edges_length))])
-    assert all([np.allclose(edges_splines_smoothed[m][-1], edges_splines[m][-1]) and np.allclose(edges_splines[m][-1], nodes_coords[edges_remapped[:, -1][m]]) for m in range(len(edges_length))])
+    assert all([np.allclose(edges_spline_smoothed[m][0], edges_spline[m][0]) and np.allclose(edges_spline[m][0], nodes_coords[edges_remapped[:, 0][m]]) for m in range(len(edges_length))])
+    assert all([np.allclose(edges_spline_smoothed[m][-1], edges_spline[m][-1]) and np.allclose(edges_spline[m][-1], nodes_coords[edges_remapped[:, -1][m]]) for m in range(len(edges_length))])
 
 
 
